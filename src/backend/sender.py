@@ -1,8 +1,11 @@
 import smtplib
 import ssl
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import config
+
+logger = logging.getLogger("maildrop")
 
 # send an email
 def send_email(from_address, to_address, subject, body):
@@ -31,8 +34,17 @@ def send_email(from_address, to_address, subject, body):
         server.send_message(message)
         server.quit()
 
+        logger.info(f"Sent email from {message['From']} to {message['To']}")
+
         return True, "Sent successfully"
+    
     except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+
         if server:
-            server.quit()
+            try:
+                server.quit()
+            except:
+                pass
+            
         return False, str(e)

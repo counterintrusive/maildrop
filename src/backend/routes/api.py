@@ -5,8 +5,17 @@ import config
 import re
 import random
 import string
+import logging
+
+logger = logging.getLogger("maildrop")
 
 bp = Blueprint('api', __name__)
+
+# Log API requests
+@bp.after_request
+def log_after_request(response):
+    logger.info(f"API Request | {request.remote_addr} | {request.method} | {request.path} | Status: {response.status}")
+    return response
 
 # Make a random email containing 6 characters
 @bp.route('/get_random_address')

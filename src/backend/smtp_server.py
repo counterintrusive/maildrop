@@ -9,6 +9,8 @@ import config
 # Disable aiosmtpd's logging
 logging.getLogger('mail.log').setLevel(logging.ERROR)
 
+logger = logging.getLogger("maildrop")
+
 # Class for SMTP server logic
 class SMTPServer:
     # This function is called when the server receives an email
@@ -27,8 +29,8 @@ class SMTPServer:
 
 # This function sets up and runs the SMTP server
 def run_smtp_server(host: str = "0.0.0.0", port: int = 25):
-    logging.info(f"Starting SMTP server on {host}:{port}")
-    
+    logger.info(f"Starting SMTP server on {host}:{port}")
+
     handler = SMTPServer()
     controller = Controller(handler, hostname=host, port=port)
     

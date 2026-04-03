@@ -2,6 +2,9 @@ import json
 import re
 import os
 import config
+import logging
+
+logger = logging.getLogger("maildrop")
 
 # Reads the contents of the inbox.json file and returns it as a dictionary
 def read_inbox() -> dict:
@@ -22,6 +25,8 @@ def check_inbox_size():
         return
 
     if os.path.getsize(config.INBOX_FILE_NAME) > config.MAX_INBOX_SIZE:
+        logger.warning("Inbox size limit reached, Wiping inbox.")
+
         write_inbox({})
 
 # Adds a new email to the inbox
@@ -35,6 +40,8 @@ def recv_email(email_json: dict):
 
     if recipient not in inbox:
         inbox[recipient] = []
+
+    logger.info(f"Inbox {email_json.get('To')} received email from {email_json.get('From')}")
     
     inbox[recipient].append(email_json)
     write_inbox(inbox)
