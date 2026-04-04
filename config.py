@@ -26,6 +26,7 @@ class Settings(BaseSettings):
 
 try:
     settings = Settings()
+    logger.info("Loaded configuration.")
 except ValidationError as e:
     logger.critical("Configuration Error! Maildrop cannot start.")
 

@@ -22,7 +22,7 @@ class SMTPServer:
 
             inbox_handler.recv_email(parsed_email)
         except Exception as e:
-            print(e)
+            logger.error(f"Failed to process email: {e}")
             return '500 Could not process email'
 
         return '250 Message accepted for delivery'
@@ -37,6 +37,6 @@ def run_smtp_server(host: str = "0.0.0.0", port: int = 25):
     try:
         controller.start()
     except Exception as e:
-        print("Failed to start SMTP server")
+        logger.critical(f"Failed to start SMTP server: {e}")
     
     asyncore.loop()

@@ -2,16 +2,16 @@ import os
 import sys
 import threading
 import logging
+from src.backend.logging import setup_logging
 
 if __name__ == "__main__":
+    setup_logging(level=logging.INFO)
+    logger = logging.getLogger("maildrop")
+
     # Check if the script is run as root
     if os.geteuid() != 0:
-        print("script must be run as root")
+        logger.critical("Maildrop must be ran as root.")
         sys.exit(1)
-
-    # setup logging
-    from src.backend.logging import setup_logging
-    setup_logging(level=logging.INFO)
 
     # import backend after logging is set up to report errors
     import config
@@ -30,5 +30,5 @@ if __name__ == "__main__":
         flask_thread.join()
         smtp_thread.join()
     except KeyboardInterrupt:
-        print("Stopping server.")
+        logger.info("Stopping Server")
         os._exit(0)
