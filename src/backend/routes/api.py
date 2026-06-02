@@ -47,12 +47,87 @@ def _origin_allowed() -> bool:
     return False
 
 
-# Make a random email containing 6 characters
+# Word lists for generating human-readable local parts
+# Multiple patterns avoid fingerprinting from repeated identical formats.
+FIRST_NAMES = [
+    "alex", "andy", "ben", "cara", "chris", "dan", "dave", "emma",
+    "eric", "grace", "jade", "james", "jane", "jess", "jill", "john",
+    "julia", "kate", "kurt", "lara", "luke", "maria", "mark", "matt",
+    "maya", "megan", "mia", "mike", "nate", "nina", "noah", "nora",
+    "owen", "paige", "paul", "quinn", "ray", "rose", "ruth", "ryan",
+    "sam", "sara", "seth", "sophie", "tess", "tom", "troy", "vera",
+    "vince", "wade", "will", "zara", "zoe", "adam", "amy", "anna",
+    "beau", "beth", "brad", "chloe", "cole", "dana", "drew", "ella",
+]
+
+LAST_NAMES = [
+    "adams", "allen", "baker", "bell", "brown", "carter", "clark",
+    "cole", "cook", "cooper", "cox", "davis", "diaz", "evans", "fisher",
+    "foster", "garcia", "gray", "green", "hall", "harris", "hill",
+    "howard", "hughes", "james", "jenkins", "jones", "kelly", "king",
+    "lee", "lewis", "long", "lopez", "martin", "miller", "moore",
+    "morgan", "murphy", "nelson", "parker", "perez", "phillips", "price",
+    "reed", "rivera", "roberts", "ross", "russell", "sanchez", "scott",
+    "smith", "stewart", "taylor", "thomas", "turner", "walker", "ward",
+    "watson", "white", "williams", "wilson", "wood", "wright", "young",
+]
+
+NOUNS = [
+    "tiger", "eagle", "panda", "robin", "otter", "crane", "fox", "hawk",
+    "wolf", "bear", "deer", "dove", "duck", "frog", "hare", "hawk",
+    "heron", "koala", "lark", "lion", "lynx", "mole", "moose", "newt",
+    "owl", "puma", "raven", "seal", "shrew", "skunk", "snail",
+    "swan", "toad", "whale", "wren", "elm", "fir", "oak", "pine",
+    "rose", "lily", "iris", "fern", "moss", "reed", "vine", "willow",
+    "ash", "beech", "birch", "cedar", "cherry", "cypress", "hazel",
+    "hemlock", "holly", "ivy", "juniper", "laurel", "maple", "myrtle",
+    "olive", "pear", "plum", "poplar", "spruce", "yew", "cove", "dale",
+    "dell", "edge", "ford", "gate", "glen", "hill", "knoll", "meadow",
+    "moor", "peak", "ridge", "vale", "wood", "brook", "creek", "lake",
+    "pond", "pool", "river", "stream", "bay", "reef", "shore", "wave",
+]
+
+
+def _generate_local_part() -> str:
+    """Generate a human-readable local part using one of several patterns.
+
+    Avoids high-entropy random strings that security systems flag.
+    """
+    num = secrets.randbelow(900) + 100  # 3-digit number
+    small_num = secrets.randbelow(90) + 10  # 2-digit number
+    pattern = secrets.choice([
+        # first.last.number — e.g. james.smith.847
+        lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(LAST_NAMES)}.{num}",
+        # first_last_number — e.g. emma_brown_847
+        lambda: f"{secrets.choice(FIRST_NAMES)}_{secrets.choice(LAST_NAMES)}_{num}",
+        # first-last-number — e.g. luke-hill-312
+        lambda: f"{secrets.choice(FIRST_NAMES)}-{secrets.choice(LAST_NAMES)}-{num}",
+        # first.last — e.g. alex.miller
+        lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(LAST_NAMES)}",
+        # first_last — e.g. sam_smith
+        lambda: f"{secrets.choice(FIRST_NAMES)}_{secrets.choice(LAST_NAMES)}",
+        # first-last — e.g. mia-jones
+        lambda: f"{secrets.choice(FIRST_NAMES)}-{secrets.choice(LAST_NAMES)}",
+        # firstNUMBER — e.g. alex847
+        lambda: f"{secrets.choice(FIRST_NAMES)}{num}",
+        # first.noun — e.g. sam.fox
+        lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(NOUNS)}",
+        # first_noun — e.g. kate_tiger
+        lambda: f"{secrets.choice(FIRST_NAMES)}_{secrets.choice(NOUNS)}",
+        # nounNUMBER — e.g. tiger312
+        lambda: f"{secrets.choice(NOUNS)}{num}",
+        # first.smallnum — e.g. kate.42
+        lambda: f"{secrets.choice(FIRST_NAMES)}.{small_num}",
+    ])
+    return pattern()
+
+
+# Make a random email with a human-readable local part
 @bp.route('/get_random_address')
 def get_random_address():
-    random_string = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(6))
+    local_part = _generate_local_part()
     domain = secrets.choice(config.settings.domain_list)
-    return jsonify({"address": f"{random_string}@{domain}"}), 200
+    return jsonify({"address": f"{local_part}@{domain}"}), 200
 
 # Get an email domain
 @bp.route('/get_domain')
@@ -69,6 +144,9 @@ def get_inbox():
         return jsonify({"error": "Unauthorized"}), 401
 
     address_inbox = inbox_handler.read_inbox(recipient=addr)
+    # Create the inbox file if it doesn't exist yet, so the SMTP server
+    # will accept mail for this address (prevents catch-all detection)
+    inbox_handler.create_inbox(addr)
     return jsonify(address_inbox), 200
 
 # This route sends an email

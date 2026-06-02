@@ -79,6 +79,30 @@ def _evict_oldest(emails: list, max_emails: int) -> list:
     return emails
 
 
+def inbox_exists(recipient: str) -> bool:
+    """Check if an inbox file already exists for this recipient.
+
+    Used by the SMTP RCPT handler to reject mail for unknown addresses,
+    preventing SMTP handshake probes from detecting catch-all behaviour.
+    """
+    path = _inbox_path(recipient)
+    return os.path.isfile(path)
+
+
+def create_inbox(recipient: str):
+    """Create an empty inbox file for a recipient if it doesn't exist.
+
+    This is called when a user generates or sets an email address via the
+    web panel, so the SMTP server will accept mail for it.
+    """
+    path = _inbox_path(recipient)
+    if not os.path.isfile(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump([], f)
+        logger.info(f"Created inbox for {recipient}")
+
+
 def recv_email(email_json: dict):
     """Add a new email to the recipient's per-inbox file.
 

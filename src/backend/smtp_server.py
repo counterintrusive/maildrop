@@ -1,4 +1,6 @@
 import asyncore
+import asyncio
+import secrets
 import time
 import logging
 import os
@@ -115,6 +117,19 @@ class SMTPServer:
     async def handle_RCPT(self, server, session, envelope, address, rcpt_options):
         client_ip = session.peer[0]
         logger.info(f"SMTP RCPT from {client_ip} -> {address}")
+
+        # Small random delay to mimic real server processing time
+        # (prevents instant responses that flag automated probes)
+        await asyncio.sleep(secrets.randbelow(500) / 1000.0)
+
+        # Only accept mail for addresses that have an existing inbox.
+        # This prevents SMTP handshake probes from detecting catch-all:
+        # random addresses like jhg7624bshg@domain.com will get "550 No such user"
+        # instead of "250 OK", making the domain look like a real mail server.
+        if not inbox_handler.inbox_exists(address):
+            logger.info(f"Rejected RCPT for unknown address {address} from {client_ip}")
+            return '550 No such user here'
+
         # Return MISSING to let the framework add the recipient to envelope.rcpt_tos
         return MISSING
 
@@ -172,6 +187,8 @@ def run_smtp_server(host: str = "0.0.0.0", port: int = 25):
         server_hostname=config.settings.DOMAIN,
         data_size_limit=config.settings.MAX_EMAIL_SIZE,
         tls_context=tls_context,
+        # Use a generic banner to avoid leaking the server implementation
+        ident="220 Ready",
     )
 
     try:
