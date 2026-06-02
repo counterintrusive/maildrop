@@ -114,6 +114,7 @@ body {
 
 /* action button container */
 .action-buttons {
+    margin: auto;
     display: flex;
     gap: 0.75rem;
     flex-wrap: wrap;
