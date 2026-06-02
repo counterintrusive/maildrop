@@ -39,6 +39,24 @@
     color: var(--text-color);
 }
 
+/* close X button in modal header */
+.modal-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-dark-color);
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    line-height: 1;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.modal-close-btn:hover {
+    color: var(--text-color);
+    background: var(--input-color);
+}
+
 /* contains the form inputs */
 .form-group {
     margin-bottom: 1rem;

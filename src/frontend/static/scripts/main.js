@@ -101,6 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function updateEmail(email) {
         currentEmail = email;
         emailInput.value = email;
+        sessionStorage.setItem('currentEmail', email);
         fetchInbox();
     }
     
@@ -406,13 +407,11 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="modal-content">
             <div class="modal-header">
                 <h2>${title}</h2>
+                <button type="button" class="modal-close-btn" id="modal-close-btn">&times;</button>
             </div>
             <form id="dynamic-modal-form">
                 ${fieldsHtml}
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="modal-cancel-btn">
-                        Cancel
-                    </button>
                     <button type="submit" class="btn btn-primary">
                         ${submitLabel}
                     </button>
@@ -423,13 +422,13 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.appendChild(overlay);
 
         const form = overlay.querySelector('#dynamic-modal-form');
-        const cancelBtn = overlay.querySelector('#modal-cancel-btn');
+        const closeBtn = overlay.querySelector('#modal-close-btn');
 
         function close() {
             overlay.remove();
         }
 
-        cancelBtn.addEventListener('click', close);
+        closeBtn.addEventListener('click', close);
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) close();
         });
@@ -744,9 +743,14 @@ document.addEventListener("DOMContentLoaded", () => {
         );
     }
 
-    // generate an email when the page loads
+    // generate an email when the page loads, or restore the last one
     (async () => {
-        await generateRandomEmail();
+        const savedEmail = sessionStorage.getItem('currentEmail');
+        if (savedEmail) {
+            updateEmail(savedEmail);
+        } else {
+            await generateRandomEmail();
+        }
     })();
 
     // automatic inbox refreshing
