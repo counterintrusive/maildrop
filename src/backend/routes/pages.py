@@ -16,3 +16,8 @@ def log_after_request(response):
 @bp.route('/')
 def index():
     return render_template('index.html', enable_sending=config.settings.ENABLE_SENDING)
+
+
+@bp.route('/api-docs')
+def api_docs():
+    return render_template('api-docs.html', domains=config.settings.domain_list)

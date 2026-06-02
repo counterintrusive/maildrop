@@ -57,11 +57,15 @@ _rate_limiter = RateLimiter(
 # Class for SMTP server logic
 class SMTPServer:
     def __init__(self):
-        self._msg_count: dict[str, int] = {}
+        self._msg_count: dict[int, int] = {}
 
     # This function is called when the server receives an email
     async def handle_DATA(self, server, session, envelope):
         client_ip = session.peer[0]
+
+        # Periodic cleanup of stale rate limiter entries (every 100th request)
+        if secrets.randbelow(100) == 0:
+            _rate_limiter.cleanup()
 
         # --- Rate limiting (C1) ---
         if not _rate_limiter.allow(client_ip):
@@ -69,9 +73,10 @@ class SMTPServer:
             return '452 Too many connections from your IP — try again later'
 
         # --- Per-connection message cap ---
-        self._msg_count.setdefault(client_ip, 0)
-        self._msg_count[client_ip] += 1
-        if self._msg_count[client_ip] > config.settings.SMTP_MAX_MSGS_PER_CONN:
+        conn_id = id(session)
+        self._msg_count.setdefault(conn_id, 0)
+        self._msg_count[conn_id] += 1
+        if self._msg_count[conn_id] > config.settings.SMTP_MAX_MSGS_PER_CONN:
             logger.warning(f"Message limit per connection exceeded for {client_ip}")
             return '452 Message limit per connection reached'
 

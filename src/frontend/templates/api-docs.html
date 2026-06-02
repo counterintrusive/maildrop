@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Docs — Maildrop+</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/forms.css') }}">
+    <style>
+        .docs-container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .docs-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+        }
+        .docs-header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+        }
+        .docs-nav {
+            display: flex;
+            gap: 1rem;
+        }
+        .docs-nav a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+        .docs-nav a:hover {
+            text-decoration: underline;
+        }
+        .docs-section {
+            margin-bottom: 2.5rem;
+        }
+        .docs-section h2 {
+            font-size: 1.4rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.2rem;
+        }
+        .docs-section h3 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+        .docs-section p, .docs-section ul {
+            line-height: 1.7;
+        }
+        .docs-section ul {
+            padding-left: 1.5rem;
+        }
+        .docs-section li {
+            margin-bottom: 0.3rem;
+        }
+        .endpoint-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-color);
+            border-radius: var(--content-radius);
+            padding: 1.2rem 1.5rem;
+            margin: 1rem 0;
+        }
+        .endpoint-card .method {
+            display: inline-block;
+            font-weight: 700;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            margin-right: 0.5rem;
+            text-transform: uppercase;
+        }
+        .method.get {
+            background: #2ecc71;
+            color: #000;
+        }
+        .method.post {
+            background: #3498db;
+            color: #fff;
+        }
+        .endpoint-card .path {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        .endpoint-card .desc {
+            margin: 0.5rem 0 0.3rem;
+            color: var(--text-secondary);
+        }
+        .endpoint-card .note {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        pre {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            border-radius: var(--content-radius);
+            padding: 1rem;
+            overflow-x: auto;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        code {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.85rem;
+            background: rgba(255,255,255,0.06);
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.8rem 0;
+            font-size: 0.9rem;
+        }
+        .param-table th,
+        .param-table td {
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.8rem;
+            text-align: left;
+        }
+        .param-table th {
+            background: rgba(255,255,255,0.05);
+            font-weight: 600;
+        }
+        .highlight-box {
+            background: rgba(46, 204, 113, 0.08);
+            border: 1px solid rgba(46, 204, 113, 0.25);
+            border-radius: var(--content-radius);
+            padding: 1rem 1.2rem;
+            margin: 1rem 0;
+        }
+        .highlight-box.warn {
+            background: rgba(243, 156, 18, 0.08);
+            border-color: rgba(243, 156, 18, 0.25);
+        }
+        .footer-nav {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .footer-nav a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+        .footer-nav a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 600px) {
+            .docs-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="docs-container">
+        <div class="docs-header">
+            <h1>API Documentation</h1>
+            <div class="docs-nav">
+                <a href="/">← Back to inbox</a>
+            </div>
+        </div>
+
+        <div class="docs-section">
+            <h2>Overview</h2>
+            <p>
+                Maildrop+ provides a simple REST API for generating disposable email addresses
+                and receiving messages programmatically. You need an <strong>API key</strong>
+                to authenticate requests.
+            </p>
+            <div class="highlight-box warn">
+                <strong>Note:</strong> All API endpoints require the
+                <code>Authorization: Bearer &lt;your_api_key&gt;</code> header.
+                The web UI uses session cookies instead — you only need the API key
+                for programmatic access.
+            </div>
+        </div>
+
+        <div class="docs-section">
+            <h2>Authentication</h2>
+            <h3>Getting an API key</h3>
+            <p>
+                <a href="/auth/register">Create an account</a> — an API key is automatically
+                generated for you on registration. You can view and regenerate your key from
+                the settings panel (gear icon) in the inbox view.
+            </p>
+
+            <h3>Using your API key</h3>
+            <p>Include your key in the <code>Authorization</code> header on every request:</p>
+            <pre><code>Authorization: Bearer md_abc123def456...789</code></pre>
+        </div>
+
+        <div class="docs-section">
+            <h2>Endpoints</h2>
+
+            <!-- GET /get_random_address -->
+            <div class="endpoint-card">
+                <span class="method get">GET</span>
+                <span class="path">/get_random_address</span>
+                <div class="desc">Generate a new disposable email address.</div>
+                <div class="note">
+                    Returns a JSON object with the generated <code>email</code> and the
+                    <code>domain</code> used.
+                </div>
+                <h4>Example</h4>
+                <pre><code>curl -H "Authorization: Bearer md_your_api_key" \
+  https://your-server.com/get_random_address</code></pre>
+                <h4>Response</h4>
+                <pre><code>{
+  "email": "james.smith.4821@example.com",
+  "domain": "example.com"
+}</code></pre>
+            </div>
+
+            <!-- GET /get_inbox -->
+            <div class="endpoint-card">
+                <span class="method get">GET</span>
+                <span class="path">/get_inbox?address=&lt;email&gt;</span>
+                <div class="desc">Retrieve all messages for a given address.</div>
+                <div class="note">
+                    <strong>Query parameter:</strong> <code>address</code> — the full email address
+                    (e.g. <code>james.smith.4821@example.com</code>).<br>
+                    Returns an array of email objects, each with <code>id</code>,
+                    <code>from</code>, <code>to</code>, <code>subject</code>,
+                    <code>body</code>, and <code>timestamp</code>.
+                </div>
+                <h4>Example</h4>
+                <pre><code>curl -H "Authorization: Bearer md_your_api_key" \
+  "https://your-server.com/get_inbox?address=james.smith.4821@example.com"</code></pre>
+                <h4>Response</h4>
+                <pre><code>[
+  {
+    "id": 1,
+    "from": "someone@external.com",
+    "to": "james.smith.4821@example.com",
+    "subject": "Welcome!",
+    "body": "Thanks for signing up...",
+    "timestamp": 1717200000
+  }
+]</code></pre>
+            </div>
+
+            <!-- POST /send_email -->
+            <div class="endpoint-card">
+                <span class="method post">POST</span>
+                <span class="path">/send_email</span>
+                <div class="desc">Send an email from a Maildrop+ address.</div>
+                <div class="note">
+                    Sends from one Maildrop+ address to another. Both addresses must use
+                    one of the configured domains.
+                </div>
+                <h4>Request body (JSON)</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>From</td><td>string</td><td>Sender address on a configured domain</td></tr>
+                        <tr><td>To</td><td>string</td><td>Recipient address on a configured domain</td></tr>
+                        <tr><td>Subject</td><td>string</td><td>Email subject line</td></tr>
+                        <tr><td>Body</td><td>string</td><td>Email body text</td></tr>
+                    </tbody>
+                </table>
+                <h4>Example</h4>
+                <pre><code>curl -X POST -H "Authorization: Bearer md_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "From": "sender@example.com",
+    "To": "recipient@example.com",
+    "Subject": "Hello",
+    "Body": "This is a test message"
+  }' \
+  https://your-server.com/send_email</code></pre>
+                <h4>Response</h4>
+                <pre><code>{
+  "message": "Email sent successfully"
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="docs-section">
+            <h2>Python Example</h2>
+            <pre><code>import requests
+
+API_KEY = "md_your_api_key"
+BASE_URL = "https://your-server.com"
+
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+# Generate a new address
+r = requests.get(f"{BASE_URL}/get_random_address", headers=headers)
+data = r.json()
+print("Email:", data["email"])
+
+# Check inbox
+inbox = requests.get(
+    f"{BASE_URL}/get_inbox",
+    params={"address": data["email"]},
+    headers=headers
+)
+for msg in inbox.json():
+    print(f"Subject: {msg['subject']}")
+    print(f"From: {msg['from']}")
+    print(f"Body: {msg['body']}")</code></pre>
+        </div>
+
+        <div class="docs-section">
+            <h2>Supported Domains</h2>
+            <p>
+                The following domains are currently accepted. You can check them
+                programmatically at <code>GET /get_domain</code>.
+            </p>
+            <ul>
+                {% for domain in domains %}
+                <li><code>{{ domain }}</code></li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="footer-nav">
+            <a href="/">← Back to inbox</a> &middot;
+            <a href="/auth/login">Log in</a> &middot;
+            <a href="/auth/register">Register</a>
+        </div>
+    </div>
+</body>
+</html>

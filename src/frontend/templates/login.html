@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maildrop+ — Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/forms.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='resources/favicon.ico') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>
+                <img src="{{ url_for('static', filename='resources/mail-icon.svg') }}" alt="Mail Icon">
+                maildrop+
+            </h1>
+            <p>Log in to manage your API keys</p>
+        </header>
+
+        <section class="email-panel">
+            <div id="login-form">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" class="form-control" placeholder="you@example.com" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" class="form-control" placeholder="Enter your password" required autocomplete="current-password">
+                </div>
+                <div id="login-error" class="modal-error" style="display:none;"></div>
+                <div class="modal-actions" style="justify-content: space-between;">
+                    <a href="{{ url_for('auth.register_page') }}" style="color: var(--primary-color); font-size: 0.9rem;">Create an account</a>
+                    <button type="button" class="btn btn-primary" id="login-btn">Log In</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="email-panel" style="text-align: center;">
+            <p style="color: var(--text-dark-color);">
+                <a href="{{ url_for('pages.index') }}" style="color: var(--primary-color);">Continue as guest</a>
+                — no account needed to use disposable emails
+            </p>
+        </section>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const emailInput = document.getElementById("email");
+            const passwordInput = document.getElementById("password");
+            const loginBtn = document.getElementById("login-btn");
+            const errorEl = document.getElementById("login-error");
+
+            async function login() {
+                const email = emailInput.value.trim().toLowerCase();
+                const password = passwordInput.value;
+
+                if (!email || !password) {
+                    errorEl.textContent = "Email and password are required";
+                    errorEl.style.display = "block";
+                    return;
+                }
+
+                loginBtn.disabled = true;
+                loginBtn.textContent = "Logging in...";
+                errorEl.style.display = "none";
+
+                try {
+                    const response = await fetch("/auth/login", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email, password }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || "Login failed");
+                    }
+
+                    // Redirect to the main page
+                    window.location.href = "/";
+                } catch (err) {
+                    errorEl.textContent = err.message;
+                    errorEl.style.display = "block";
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = "Log In";
+                }
+            }
+
+            loginBtn.addEventListener("click", login);
+            passwordInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") login();
+            });
+            emailInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") passwordInput.focus();
+            });
+        });
+    </script>
+</body>
+</html>

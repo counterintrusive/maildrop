@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maildrop</title>
+    <title>Maildrop+</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles/forms.css') }}">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='resources/favicon.ico') }}">
-    <meta name="title" content="Maildrop" />
-    <meta name="description" content="maildrop is a free disposable email service." />
+    <meta name="title" content="Maildrop+" />
+    <meta name="description" content="Maildrop+ is a self-hostable disposable email service with API key authentication." />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Maildrop" />
-    <meta property="og:description" content="maildrop is a free disposable email service." />
+    <meta property="og:title" content="Maildrop+" />
+    <meta property="og:description" content="Maildrop+ is a self-hostable disposable email service with API key authentication." />
     <meta property="og:image" content="/static/resources/app.png" />
 </head>
 <body>
@@ -19,9 +19,20 @@
         <header class="header">
             <h1>
                 <img src="{{ url_for('static', filename='resources/mail-icon.svg') }}" alt="Mail Icon">
-                maildrop
+                maildrop+
             </h1>
-            <p>A simple self hostable email inbox.</p>
+            <p>A self-hostable disposable email inbox with API key authentication.</p>
+            <div class="auth-links" style="margin-top: 0.5rem; font-size: 0.85rem;">
+                <a href="{{ url_for('pages.api_docs') }}" style="color: var(--primary-color); margin-right: 0.8rem;">API Docs</a>
+                {% if session.user_id %}
+                    <span style="color: var(--text-dark-color);">Logged in</span>
+                    <a href="{{ url_for('auth.logout') }}" style="color: var(--primary-color); margin-left: 0.5rem;">Log out</a>
+                {% else %}
+                    <a href="{{ url_for('auth.login_page') }}" style="color: var(--primary-color);">Log in</a>
+                    <span style="color: var(--text-dark-color); margin: 0 0.25rem;">|</span>
+                    <a href="{{ url_for('auth.register_page') }}" style="color: var(--primary-color);">Register</a>
+                {% endif %}
+            </div>
         </header>
         <section class="email-panel">
             <div class="email-display">
@@ -55,6 +66,12 @@
                 <button id="refresh-btn" title="Refresh Inbox">
                     <img src="{{ url_for('static', filename='resources/refresh-icon.svg') }}" alt="Refresh Icon">
                 </button>
+                <button id="settings-btn" title="Settings" style="background:none;border:none;cursor:pointer;padding:0.5rem;border-radius:50%;transition:background-color 0.2s ease;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="filter:brightness(0) invert(1);">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
             </div>
             <ul id="inbox-list"></ul>
             <div id="inbox-placeholder">
@@ -62,7 +79,7 @@
             </div>
         </main>
     </div>
-    <script src="{{ url_for('static', filename='scripts/main.js') }}"></script>
     <script src="{{ url_for('static', filename='scripts/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='scripts/main.js') }}"></script>
 </body>
 </html>

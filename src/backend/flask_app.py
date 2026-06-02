@@ -1,7 +1,7 @@
 import logging
 import os
 from flask import Flask
-from .routes import pages, api
+from .routes import pages, api, auth
 import config
 
 logger = logging.getLogger("maildrop")
@@ -22,8 +22,15 @@ else:
     app.secret_key = secrets.token_hex(32)
     logger.warning("FLASK_SECRET_KEY not set — using ephemeral key (sessions invalidated on restart)")
 
+# Session config
+app.config["SESSION_PERMANENT"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = 86400 * 30  # 30 days
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
 app.register_blueprint(pages.bp) # load the blueprint for the all of the main web page routes
 app.register_blueprint(api.bp) # load the blueprint for the all of the api routes
+app.register_blueprint(auth.bp) # load the blueprint for the auth routes
 
 
 # Security headers (L2)
@@ -32,10 +39,10 @@ def add_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    # Strict CSP — only same-origin resources
+    # CSP — allow inline scripts on auth pages (login/register have inline JS)
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
         "font-src 'self'; "

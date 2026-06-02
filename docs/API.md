@@ -1,6 +1,6 @@
 ## Routes
 
-These are all of the routes in the maildrop API.
+These are all of the routes in the Maildrop+ API.
 
 ### Get Inbox
 Gets the current inbox of an email address

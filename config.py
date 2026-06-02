@@ -79,7 +79,7 @@ try:
     settings = Settings()
     logger.info("Loaded configuration.")
 except ValidationError as e:
-    logger.critical("Configuration Error! Maildrop cannot start.")
+    logger.critical("Configuration Error! Maildrop+ cannot start.")
 
     # print the errors in a clean way
     for error in e.errors():
