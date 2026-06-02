@@ -165,20 +165,6 @@ Revokes any existing key and generates a new one. Each user is limited to 1 acti
 
 Rate limited: 30 requests per 60 seconds per IP.
 
-### Revoke API Key
-
-```http
-DELETE /api_key/<key_id>
-Authorization: Bearer <key>
-```
-
-**Response** `200`
-```json
-{
-  "message": "Key revoked"
-}
-```
-
 ---
 
 ## Address Management
