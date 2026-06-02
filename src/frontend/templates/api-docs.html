@@ -1,2 +1,387 @@
 <!DOCTYPE html>
-<htm...(argument truncated)
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maildrop+ API Documentation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/style.css') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='resources/favicon.ico') }}">
+    <style>
+        .api-content {
+            background-color: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: var(--container-radius);
+            border: 1px solid var(--border-color);
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        .api-content h2 {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+        .api-content h2:first-child {
+            margin-top: 0;
+        }
+        .api-content h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+        }
+        .api-content p {
+            color: var(--text-dark-color);
+            margin-bottom: 0.75rem;
+            line-height: 1.7;
+        }
+        .api-content a {
+            color: var(--primary-color);
+        }
+        .api-content code {
+            background-color: var(--input-color);
+            padding: 0.15em 0.4em;
+            border-radius: var(--content-radius);
+            font-family: var(--font-family);
+            font-size: 0.9em;
+            color: var(--text-color);
+        }
+        .api-content pre {
+            background-color: var(--input-color);
+            padding: 1rem;
+            border-radius: var(--content-radius);
+            overflow-x: auto;
+            margin: 1rem 0;
+            border: 1px solid var(--border-color);
+            font-family: var(--font-family);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+        .api-content pre code {
+            background: none;
+            padding: 0;
+        }
+        .api-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        .api-content th, .api-content td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+        }
+        .api-content th {
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            font-weight: 600;
+        }
+        .api-content td {
+            color: var(--text-dark-color);
+        }
+        .api-content tr:nth-child(even) td {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+        .api-content hr {
+            border: none;
+            border-top: 1px solid var(--border-color);
+            margin: 2rem 0;
+        }
+        .api-content ol, .api-content ul {
+            color: var(--text-dark-color);
+            padding-left: 1.5rem;
+            margin-bottom: 0.75rem;
+            line-height: 1.7;
+        }
+        .api-content ol li, .api-content ul li {
+            margin-bottom: 0.35rem;
+        }
+        .http-method { font-weight: bold; }
+        .get { color: #61affe; }
+        .post { color: #49cc90; }
+        .delete { color: #f93e3e; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>
+                <img src="{{ url_for('static', filename='resources/mail-icon.svg') }}" alt="Mail Icon">
+                maildrop+
+            </h1>
+            <p>API Documentation</p>
+            <div class="auth-links" style="margin-top: 0.5rem; font-size: 0.85rem;">
+                <a href="/" style="color: var(--primary-color); margin-right: 0.8rem;">← Back to Inbox</a>
+                {% if session.user_id %}
+                    <span style="color: var(--text-dark-color);">Logged in</span>
+                    <a href="{{ url_for('auth.logout') }}" style="color: var(--primary-color); margin-left: 0.5rem;">Log out</a>
+                {% else %}
+                    <a href="{{ url_for('auth.login_page') }}" style="color: var(--primary-color);">Log in</a>
+                    <span style="color: var(--text-dark-color); margin: 0 0.25rem;">|</span>
+                    <a href="{{ url_for('auth.register_page') }}" style="color: var(--primary-color);">Register</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <section class="api-content">
+            <h2>Authentication</h2>
+            <p>Maildrop+ supports two authentication methods:</p>
+            <ol>
+                <li><strong>Session-based</strong> — used by the web UI. Login via <code>POST /auth/login</code>, then session cookie is set automatically.</li>
+                <li><strong>API key</strong> — for programmatic/agent access. Pass as <code>Authorization: Bearer &lt;key&gt;</code> header.</li>
+            </ol>
+            <p>API keys are generated on registration and can be retrieved via <code>GET /auth/me</code> or regenerated via <code>POST /auth/generate</code>.</p>
+
+            <hr>
+
+            <h2>Auth Endpoints</h2>
+
+            <h3>Register</h3>
+            <pre><code><span class="http-method post">POST</span> /auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "yourpassword"
+}</code></pre>
+            <p><strong>Response</strong> <code>201</code></p>
+            <pre><code>{
+  "message": "Registered successfully",
+  "api_key": "md_abc123...",
+  "user": {"id": 1, "email": "user@example.com"}
+}</code></pre>
+            <p>Rate limited: 10 attempts per 60 seconds per IP.</p>
+
+            <h3>Login</h3>
+            <pre><code><span class="http-method post">POST</span> /auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "yourpassword"
+}</code></pre>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "message": "Logged in",
+  "user": {"id": 1, "email": "user@example.com"},
+  "has_api_key": true
+}</code></pre>
+            <p>Rate limited: 10 attempts per 60 seconds per IP.</p>
+
+            <h3>Logout</h3>
+            <pre><code><span class="http-method post">POST</span> /auth/logout</code></pre>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "message": "Logged out"
+}</code></pre>
+
+            <h3>Get Current User</h3>
+            <pre><code><span class="http-method get">GET</span> /auth/me</code></pre>
+            <p>Requires session (cookie). Returns user info, flags, and API key.</p>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "authenticated": true,
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "flags": "custom_email",
+    "created_at": "2025-12-01 12:00:00",
+    "label": ""
+  },
+  "has_api_key": true,
+  "api_key": "md_abc123...",
+  "keys": [
+    {
+      "id": 1,
+      "key_prefix": "md_abc1234",
+      "raw_key": "md_abc123...",
+      "created_at": "2025-12-01 12:00:00"
+    }
+  ],
+  "flags": ["custom_email"]
+}</code></pre>
+
+            <h3>Login Page (HTML)</h3>
+            <pre><code><span class="http-method get">GET</span> /auth/login</code></pre>
+            <p>Renders the login page. Redirects to <code>/</code> if already logged in.</p>
+
+            <h3>Register Page (HTML)</h3>
+            <pre><code><span class="http-method get">GET</span> /auth/register</code></pre>
+            <p>Renders the registration page. Redirects to <code>/</code> if already logged in.</p>
+
+            <hr>
+
+            <h2>API Key Management</h2>
+
+            <h3>List API Keys</h3>
+            <pre><code><span class="http-method get">GET</span> /api_key
+Authorization: Bearer &lt;key&gt;</code></pre>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "keys": [
+    {
+      "id": 1,
+      "key_prefix": "md_abc1234",
+      "raw_key": "md_abc123...",
+      "created_at": "2025-12-01 12:00:00"
+    }
+  ]
+}</code></pre>
+
+            <h3>Generate / Regenerate API Key</h3>
+            <pre><code><span class="http-method post">POST</span> /auth/generate
+Authorization: Bearer &lt;key&gt;</code></pre>
+            <p>Revokes any existing key and generates a new one. Each user is limited to 1 active key.</p>
+            <p><strong>Response</strong> <code>201</code></p>
+            <pre><code>{
+  "api_key": "md_newkey...",
+  "user_id": 1
+}</code></pre>
+            <p>Rate limited: 30 requests per 60 seconds per IP.</p>
+
+            <hr>
+
+            <h2>Address Management</h2>
+
+            <h3>Generate Random Address</h3>
+            <pre><code><span class="http-method get">GET</span> /address</code></pre>
+            <p>Generates a random human-readable address (e.g. <code>james.smith.847@yourdomain.com</code>). If the user is authenticated (session or API key), the address is automatically claimed. Guests get an unclaimed address.</p>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "address": "james.smith.847@yourdomain.com"
+}</code></pre>
+
+            <h3>List Owned Addresses</h3>
+            <pre><code><span class="http-method get">GET</span> /addresses
+Authorization: Bearer &lt;key&gt;</code></pre>
+            <p>Returns all addresses claimed by the authenticated user.</p>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "addresses": [
+    "james.smith.847@yourdomain.com",
+    "alex.miller@yourdomain.com"
+  ]
+}</code></pre>
+
+            <h3>Claim a Specific Address</h3>
+            <pre><code><span class="http-method post">POST</span> /addresses
+Content-Type: application/json
+Authorization: Bearer &lt;key&gt;
+
+{
+  "address": "custom@yourdomain.com"
+}</code></pre>
+            <p>Claims a specific address for the authenticated user. Requires the <code>custom_email</code> flag on the user account. Max 10 addresses per user.</p>
+            <p><strong>Response</strong> <code>201</code></p>
+            <pre><code>{
+  "message": "Address claimed"
+}</code></pre>
+            <p>Rate limited: 30 requests per 60 seconds per IP.</p>
+
+            <h3>Delete (Release) an Address</h3>
+            <pre><code><span class="http-method delete">DELETE</span> /addresses/&lt;address&gt;
+Authorization: Bearer &lt;key&gt;</code></pre>
+            <p>Releases an address claim and removes its inbox file from disk.</p>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "message": "Address released"
+}</code></pre>
+
+            <hr>
+
+            <h2>Inbox</h2>
+
+            <h3>Get Inbox</h3>
+            <pre><code><span class="http-method get">GET</span> /inbox?address=you@yourdomain.com</code></pre>
+            <p>Returns the inbox for a given address. If the user is authenticated, ownership is enforced (you can only read addresses you own). Guests can read any unclaimed address. Protected addresses require the <code>Authorization</code> header with the configured password.</p>
+            <p><strong>Parameters</strong></p>
+            <table>
+                <tr><th>Parameter</th><th>Description</th></tr>
+                <tr><td><code>address</code></td><td>The email address to get.</td></tr>
+            </table>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>[
+  {
+    "From": "sender@example.com",
+    "To": "you@yourdomain.com",
+    "Subject": "Hello",
+    "Timestamp": 1764072990,
+    "Body": "This is a test email.",
+    "Sent": "Nov 25 at 12:16:30",
+    "ContentType": "Text"
+  }
+]</code></pre>
+
+            <hr>
+
+            <h2>Send Email</h2>
+
+            <h3>Send an Email</h3>
+            <pre><code><span class="http-method post">POST</span> /send
+Content-Type: application/json
+Authorization: Bearer &lt;key&gt;
+
+{
+  "From": "you@yourdomain.com",
+  "To": "friend@yourdomain.com",
+  "Subject": "Hello",
+  "Body": "This is a test email."
+}</code></pre>
+            <p>Sends an email between addresses on accepted domains. Both <code>From</code> and <code>To</code> must be on a configured domain (prevents open relay). Authenticated users can only send from addresses they own.</p>
+            <p>Requires <code>ENABLE_SENDING = True</code> in config.</p>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "message": "Email sent"
+}</code></pre>
+
+            <hr>
+
+            <h2>Domains</h2>
+
+            <h3>Get Domains</h3>
+            <pre><code><span class="http-method get">GET</span> /domains</code></pre>
+            <p>Returns the list of accepted email domains.</p>
+            <p><strong>Response</strong> <code>200</code></p>
+            <pre><code>{
+  "domains": ["yourdomain.com"]
+}</code></pre>
+
+            <hr>
+
+            <h2>Error Responses</h2>
+            <p>All endpoints return errors in a consistent format:</p>
+            <pre><code>{
+  "error": "Description of what went wrong"
+}</code></pre>
+
+            <p><strong>Common HTTP status codes:</strong></p>
+            <table>
+                <tr><th>Code</th><th>Meaning</th></tr>
+                <tr><td>200</td><td>Success</td></tr>
+                <tr><td>201</td><td>Created</td></tr>
+                <tr><td>400</td><td>Bad request (missing/invalid parameters)</td></tr>
+                <tr><td>401</td><td>Unauthorized (not logged in or bad key)</td></tr>
+                <tr><td>403</td><td>Forbidden (not your resource)</td></tr>
+                <tr><td>404</td><td>Not found</td></tr>
+                <tr><td>409</td><td>Conflict (e.g. email already registered)</td></tr>
+                <tr><td>429</td><td>Rate limited</td></tr>
+                <tr><td>500</td><td>Server error</td></tr>
+            </table>
+
+            <hr>
+
+            <h2>Rate Limiting</h2>
+            <table>
+                <tr><th>Endpoint(s)</th><th>Limit</th></tr>
+                <tr><td><code>POST /auth/login</code></td><td>10 per 60s per IP</td></tr>
+                <tr><td><code>POST /auth/register</code></td><td>10 per 60s per IP</td></tr>
+                <tr><td><code>POST /addresses</code></td><td>30 per 60s per IP</td></tr>
+                <tr><td><code>POST /auth/generate</code></td><td>30 per 60s per IP</td></tr>
+                <tr><td>SMTP server (per connection)</td><td>100 messages</td></tr>
+            </table>
+        </section>
+    </div>
+</body>
+</html>
