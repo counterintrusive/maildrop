@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = Field(default=25, ge=1, le=65535)
     INBOX_FILE_NAME: str = "inbox.json"
     MAX_INBOX_SIZE: int = Field(default=100000000, ge=1)
-    PROTECTED_ADDRESSES: str = "^admin.*"
+    PROTECTED_ADDRESSES: str = "^(admin|postmaster|abuse|webmaster|noreply|no-reply|mailer-daemon|mdaemon|root|hostmaster|usenet|news|spam|dmarc|mailnull|nobody|support|help|info|security|registrar|domain|dns|host|server|test|bounce|return-path|feedback|errors|mailer|sender|reply|list-request|list-owner|list-admin|majordomo|owner-|request-|subscribe|unsubscribe).*"
     PASSWORD: str = "password"
     DOMAINS: str = "yourdomain.com"
     ENABLE_SENDING: bool = False
