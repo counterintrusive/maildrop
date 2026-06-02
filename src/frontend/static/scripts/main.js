@@ -28,6 +28,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // function definitions
 
+    // show a brief toast message that auto-disappears
+    function showToast(message, durationMs = 3000) {
+        const existing = document.querySelector('.toast-message');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'toast-message';
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+            background: var(--primary-color); color: white; padding: 0.75rem 1.5rem;
+            border-radius: var(--content-radius); font-size: 0.9rem;
+            z-index: 10000; opacity: 0; transition: opacity 0.3s ease;
+            max-width: 90vw; text-align: center;
+        `;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => { toast.style.opacity = '1'; });
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, durationMs);
+    }
+
     // HTML-escape untrusted text to prevent XSS
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -64,11 +87,9 @@ document.addEventListener("DOMContentLoaded", () => {
     async function generateRandomEmail() {
         const newAddress = await getRandomAddress();
         if (newAddress.error) {
-            // If we get an auth error, the user needs to log in to get an API key
-            // but the guest endpoint should work — show a generic error
-            if (newAddress.error === "Unauthorized") {
-                // Guest mode: the endpoint should work without auth
-                // If it fails, something else is wrong
+            if (newAddress.error.includes("limit reached")) {
+                showToast("Maximum 10 addresses reached — delete one first.");
+            } else if (newAddress.error === "Unauthorized") {
                 console.error("Failed to get random address:", newAddress.error);
             }
             return;
@@ -229,38 +250,131 @@ document.addEventListener("DOMContentLoaded", () => {
         const domainData = await getDomains();
         const acceptedDomains = domainData.domains || [];
 
-        showModalForm(
-            "Use Custom Email",
-            [
-                {
-                    name: "email",
-                    label: `Email address (accepted domains: ${acceptedDomains.join(", ")})`,
-                    type: "email",
-                    placeholder: `user@${acceptedDomains[0] || "example.com"}`,
-                    required: true
-                }
-            ],
-            async (data) => {
-                let customEmail = data.email.trim();
-                if (!customEmail) return;
+        // Check if user is logged in and has the custom_email flag
+        let userFlags = [];
+        let userAddresses = [];
+        let isLoggedIn = false;
 
-                if (!customEmail.includes("@")) {
-                    customEmail = customEmail + "@" + acceptedDomains[0];
+        try {
+            const meResponse = await fetch('/auth/me');
+            const meData = await meResponse.json();
+            if (meData.authenticated) {
+                isLoggedIn = true;
+                userFlags = meData.flags || [];
+                userAddresses = meData.user?.addresses || [];
+
+                // Fetch user's owned addresses
+                const addrResponse = await fetch('/addresses');
+                if (addrResponse.ok) {
+                    const addrData = await addrResponse.json();
+                    userAddresses = addrData.addresses || [];
+                }
+            }
+        } catch (_) {
+            // Not logged in or fetch failed — fall through
+        }
+
+        if (isLoggedIn && userFlags.includes('custom_email')) {
+            // User has the custom_email flag — show both owned addresses and manual input
+            const fields = [];
+
+            if (userAddresses.length > 0) {
+                fields.push({
+                    name: "address_select",
+                    label: "Your addresses",
+                    type: "select",
+                    options: userAddresses,
+                    required: false
+                });
+            }
+
+            fields.push({
+                name: "email",
+                label: `Or type a custom address (domains: ${acceptedDomains.join(", ")})`,
+                type: "email",
+                placeholder: `user@${acceptedDomains[0] || "example.com"}`,
+                required: false
+            });
+
+            showModalForm(
+                "Use Custom Email",
+                fields,
+                async (data) => {
+                    let customEmail = (data.address_select || data.email || "").trim();
+                    if (!customEmail) {
+                        throw new Error("Select an address or type one.");
+                    }
+
+                    if (!customEmail.includes("@")) {
+                        customEmail = customEmail + "@" + acceptedDomains[0];
+                        updateEmail(customEmail);
+                        return;
+                    }
+
+                    const domainPart = customEmail.split("@")[1].toLowerCase();
+                    if (!acceptedDomains.some(d => d.toLowerCase() === domainPart)) {
+                        throw new Error(
+                            `"${domainPart}" is not an accepted domain.\nAccepted domains: ${acceptedDomains.join(", ")}`
+                        );
+                    }
+
                     updateEmail(customEmail);
-                    return;
-                }
-
-                const domainPart = customEmail.split("@")[1].toLowerCase();
-                if (!acceptedDomains.some(d => d.toLowerCase() === domainPart)) {
-                    throw new Error(
-                        `"${domainPart}" is not an accepted domain.\nAccepted domains: ${acceptedDomains.join(", ")}`
-                    );
-                }
-
-                updateEmail(customEmail);
-            },
-            "Use"
-        );
+                },
+                "Use"
+            );
+        } else if (isLoggedIn && userAddresses.length > 0) {
+            // Logged in but no custom_email flag — show only owned addresses
+            showModalForm(
+                "Use Custom Email",
+                [
+                    {
+                        name: "address_select",
+                        label: "Your addresses",
+                        type: "select",
+                        options: userAddresses,
+                        required: true
+                    }
+                ],
+                async (data) => {
+                    updateEmail(data.address_select);
+                },
+                "Use"
+            );
+        } else if (isLoggedIn) {
+            // Logged in but no addresses and no custom_email flag — nothing to show
+            showModalForm(
+                "Use Custom Email",
+                [
+                    {
+                        name: "info",
+                        label: "",
+                        type: "text",
+                        placeholder: "No addresses yet — generate one first.",
+                        required: false,
+                        readonly: true
+                    }
+                ],
+                async () => {},
+                "Close"
+            );
+        } else {
+            // Guest — not allowed
+            showModalForm(
+                "Use Custom Email",
+                [
+                    {
+                        name: "info",
+                        label: "",
+                        type: "text",
+                        placeholder: "Log in to use custom addresses.",
+                        required: false,
+                        readonly: true
+                    }
+                ],
+                async () => {},
+                "Close"
+            );
+        }
     }
 
     // shows a form to the user
@@ -268,11 +382,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
 
-        const fieldsHtml = fields.map(field => `
-        <div class="form-group">
-            <label for="${field.name}">${field.label}</label>
-            <input type="${field.type}" id="${field.name}" name="${field.name}" placeholder="${field.placeholder || ''}" ${field.required ? 'required' : ''} ${field.readonly ? 'readonly' : ''}>
-        </div>`).join('');
+        const fieldsHtml = fields.map(field => {
+            if (field.type === "select") {
+                const options = (field.options || []).map(o =>
+                    `<option value="${o}">${o}</option>`
+                ).join('');
+                return `
+                <div class="form-group">
+                    <label for="${field.name}">${field.label}</label>
+                    <select id="${field.name}" name="${field.name}" class="form-control" ${field.required ? 'required' : ''}>
+                        ${options}
+                    </select>
+                </div>`;
+            }
+            return `
+            <div class="form-group">
+                <label for="${field.name}">${field.label}</label>
+                <input type="${field.type}" id="${field.name}" name="${field.name}" placeholder="${field.placeholder || ''}" ${field.required ? 'required' : ''} ${field.readonly ? 'readonly' : ''}>
+            </div>`;
+        }).join('');
 
         overlay.innerHTML = `
         <div class="modal-content">
@@ -356,50 +484,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function showSettingsGuest() {
-        showModalForm(
-            "Settings",
-            [
-                { name: "info", label: "Status", type: "text", placeholder: "", required: false, readonly: true }
-            ],
-            async () => {},
-            "Close"
-        );
-        setTimeout(() => {
-            const el = document.getElementById('info');
-            if (el) el.value = 'Not logged in — log in to manage API keys';
-        }, 50);
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div class="modal-header">
+                <h2>Settings</h2>
+            </div>
+            <p style="color: var(--text-dark-color); margin: 1.5rem 0;">
+                Not logged in — <a href="/auth/login" style="color: var(--primary-color);">Log in</a>
+                or <a href="/auth/register" style="color: var(--primary-color);">Register</a>
+                to manage API keys.
+            </p>
+            <div class="modal-actions" style="justify-content: center;">
+                <button type="button" class="btn btn-primary" id="settings-close-btn">Close</button>
+            </div>
+        </div>`;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#settings-close-btn').addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
     }
 
     function showSettingsLoggedIn(userData) {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
         overlay.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 440px;">
             <div class="modal-header">
                 <h2>Settings</h2>
-            </div>
-            <div class="form-group">
-                <label for="settings-email">Account</label>
-                <input type="text" id="settings-email" readonly style="user-select: all;">
+                <button type="button" id="settings-close-btn" style="background: none; border: none; color: var(--text-dark-color); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; border-radius: 4px;" title="Close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
             <div class="form-group">
                 <label for="settings-apikey">API Key</label>
-                <input type="text" id="settings-apikey" readonly style="user-select: all;">
-            </div>
-            <div class="modal-actions" style="justify-content: space-between;">
-                <button type="button" class="btn btn-secondary" id="settings-copy-key">Copy Key</button>
-                <div>
-                    <button type="button" class="btn btn-primary" id="settings-regenerate-key">Regenerate</button>
-                    <button type="button" class="btn btn-secondary" id="settings-close-btn">Close</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="settings-apikey" class="form-control" readonly style="user-select: all; flex: 1;">
+                    <button type="button" class="btn btn-secondary" id="settings-copy-key" title="Copy API key to clipboard" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="settings-regenerate-key" title="Revoke current key and generate a new one" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    </button>
                 </div>
             </div>
-            <p id="settings-status" style="color: var(--text-dark-color); font-size: 0.8rem; margin-top: 0.5rem;"></p>
+            <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <label style="font-size: 0.85rem; color: var(--text-dark-color); display: block; margin-bottom: 0.5rem;">Your Addresses (<span id="settings-addr-count">0</span>/10)</label>
+                <div id="settings-address-list" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+            <p id="settings-status" style="color: var(--text-dark-color); font-size: 0.8rem; margin-top: 0.75rem; min-height: 1.2em; text-align:center;"></p>
         </div>`;
 
         document.body.appendChild(overlay);
 
-        // Set values via textContent-safe properties (prevents XSS from user-controlled email)
-        document.getElementById('settings-email').value = userData.email || '';
+        // Set values — use the key from the server response
         document.getElementById('settings-apikey').value = userData.api_key || 'No API key';
 
         const closeBtn = overlay.querySelector('#settings-close-btn');
@@ -430,7 +573,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         regenBtn.addEventListener('click', async () => {
             regenBtn.disabled = true;
-            regenBtn.textContent = 'Regenerating...';
+            regenBtn.style.opacity = '0.5';
             statusEl.textContent = '';
 
             try {
@@ -442,8 +585,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (data.api_key) {
                     document.getElementById('settings-apikey').value = data.api_key;
                     setApiKey(data.api_key);
-                    statusEl.textContent = 'New key generated — save it now, it won\'t be shown again';
-                    statusEl.style.color = '#e74c3c';
+                    statusEl.textContent = 'New key generated — old key has been revoked';
+                    statusEl.style.color = 'var(--primary-color)';
                 } else {
                     statusEl.textContent = data.error || 'Failed to regenerate';
                 }
@@ -452,8 +595,125 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             regenBtn.disabled = false;
-            regenBtn.textContent = 'Regenerate';
+            regenBtn.style.opacity = '1';
         });
+
+        // Fetch and display user's addresses
+        loadAddressList(overlay);
+    }
+
+    async function loadAddressList(overlay) {
+        try {
+            const response = await fetch('/addresses');
+            const data = await response.json();
+            const list = overlay.querySelector('#settings-address-list');
+            const count = overlay.querySelector('#settings-addr-count');
+            if (!list) return;
+
+            const addresses = data.addresses || [];
+            if (count) count.textContent = addresses.length;
+
+            if (addresses.length === 0) {
+                list.innerHTML = '<div style="color: var(--text-dark-color); font-size: 0.85rem; padding: 0.5rem 0;">No addresses yet — generate one from the main page.</div>';
+                return;
+            }
+
+            list.innerHTML = addresses.map(addr => `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid var(--border-color);">
+                    <span style="font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${addr}</span>
+                    <button class="btn-delete-address" data-address="${addr}" title="Delete this address" style="background: none; border: none; color: var(--text-dark-color); cursor: pointer; padding: 0.25rem; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+            `).join('');
+
+            list.querySelectorAll('.btn-delete-address').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const addr = btn.dataset.address;
+
+                    // Confirmation modal — styled to match settings
+                    const confirmOverlay = document.createElement('div');
+                    confirmOverlay.className = 'modal-overlay';
+                    confirmOverlay.innerHTML = `
+                    <div class="modal-content" style="max-width: 400px;">
+                        <div class="modal-header">
+                            <h2>Delete Address</h2>
+                            <button type="button" class="modal-close-btn" style="background: none; border: none; color: var(--text-dark-color); cursor: pointer; padding: 0.25rem; display: flex; align-items: center; border-radius: 4px;" title="Cancel">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <p style="color: var(--text-dark-color); margin: 1rem 0; font-size: 0.9rem;">
+                            Delete <strong style="color: var(--text-color);">${escapeHtml(addr)}</strong>? This cannot be undone.
+                        </p>
+                        <div class="form-group">
+                            <label for="confirm-delete-input">Type <strong>DELETE</strong> to confirm</label>
+                            <input type="text" id="confirm-delete-input" class="form-control" placeholder="DELETE" required>
+                        </div>
+                        <div class="modal-actions" style="justify-content: flex-end; gap: 0.5rem;">
+                            <button type="button" class="btn btn-secondary" id="confirm-cancel-btn">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="confirm-delete-btn" disabled style="background-color: #e74c3c;">Delete</button>
+                        </div>
+                        <p id="confirm-delete-status" style="color: #e74c3c; font-size: 0.8rem; margin-top: 0.5rem; min-height: 1.2em; text-align: center;"></p>
+                    </div>`;
+                    document.body.appendChild(confirmOverlay);
+
+                    const confirmInput = confirmOverlay.querySelector('#confirm-delete-input');
+                    const deleteBtn = confirmOverlay.querySelector('#confirm-delete-btn');
+                    const cancelBtn = confirmOverlay.querySelector('#confirm-cancel-btn');
+                    const closeX = confirmOverlay.querySelector('.modal-close-btn');
+                    const statusEl = confirmOverlay.querySelector('#confirm-delete-status');
+
+                    function closeConfirm() {
+                        confirmOverlay.remove();
+                    }
+
+                    confirmInput.addEventListener('input', () => {
+                        deleteBtn.disabled = confirmInput.value.trim() !== 'DELETE';
+                    });
+
+                    confirmInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && !deleteBtn.disabled) deleteBtn.click();
+                        if (e.key === 'Escape') closeConfirm();
+                    });
+
+                    deleteBtn.addEventListener('click', async () => {
+                        deleteBtn.disabled = true;
+                        deleteBtn.textContent = 'Deleting...';
+                        statusEl.textContent = '';
+                        try {
+                            const delResponse = await fetch(`/addresses/${encodeURIComponent(addr)}`, { method: 'DELETE' });
+                            const delData = await delResponse.json();
+                            if (delData.message) {
+                                showToast('Address deleted');
+                                closeConfirm();
+                                loadAddressList(overlay);
+                            } else {
+                                throw new Error(delData.error || 'Failed to delete address');
+                            }
+                        } catch (err) {
+                            statusEl.textContent = err.message;
+                            deleteBtn.disabled = false;
+                            deleteBtn.textContent = 'Delete';
+                        }
+                    });
+
+                    cancelBtn.addEventListener('click', closeConfirm);
+                    closeX.addEventListener('click', closeConfirm);
+                    confirmOverlay.addEventListener('click', (e) => {
+                        if (e.target === confirmOverlay) closeConfirm();
+                    });
+                });
+            });
+        } catch (err) {
+            // Address list failed to load — not critical
+        }
     }
 
     // send button clicked

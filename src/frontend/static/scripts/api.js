@@ -26,7 +26,7 @@ async function getInbox(address, password = null) {
         headers["Authorization"] = password;
     }
 
-    const response = await fetch(`/get_inbox?address=${address}`, { headers });
+    const response = await fetch(`/inbox?address=${address}`, { headers });
 
     if (response.status === 401) {
         return { error: "Unauthorized" };
@@ -37,7 +37,7 @@ async function getInbox(address, password = null) {
 
 // get a random email from the server
 async function getRandomAddress() {
-    const response = await fetch('/get_random_address');
+    const response = await fetch('/address');
     
     if (response.status === 401) {
         return { error: "Unauthorized" };
@@ -48,14 +48,14 @@ async function getRandomAddress() {
 
 // get the accepted domains from the server
 async function getDomains() {
-    const response = await fetch('/get_domain');
+    const response = await fetch('/domains');
     
     return await response.json();
 }
 
 // send an email
 async function sendEmail(fromAddress, toAddress, subject, body) {
-    const response = await fetch('/send_email', {
+    const response = await fetch('/send', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'

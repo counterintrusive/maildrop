@@ -9,9 +9,31 @@ import os
 import secrets
 import string
 import logging
+import time
 from urllib.parse import urlparse
 
 logger = logging.getLogger("maildrop")
+
+# Per-IP rate limiter for mutation endpoints
+class _MutationLimiter:
+    def __init__(self, limit: int = 30, window: int = 60):
+        self.limit = limit
+        self.window = window
+        self._attempts: dict[str, list[float]] = {}
+
+    def allow(self, ip: str) -> bool:
+        now = time.monotonic()
+        cutoff = now - self.window
+        timestamps = self._attempts.get(ip, [])
+        timestamps = [t for t in timestamps if t > cutoff]
+        if len(timestamps) >= self.limit:
+            self._attempts[ip] = timestamps
+            return False
+        timestamps.append(now)
+        self._attempts[ip] = timestamps
+        return True
+
+_mutation_limiter = _MutationLimiter(limit=30, window=60)
 
 bp = Blueprint('api', __name__)
 
@@ -143,7 +165,7 @@ def _generate_local_part() -> str:
 
 
 # Make a random email with a human-readable local part
-@bp.route('/get_random_address')
+@bp.route('/address')
 def get_random_address():
     """Generate a random address.
 
@@ -156,6 +178,10 @@ def get_random_address():
     address = f"{local_part}@{domain}"
 
     if user_id:
+        # Check address limit before generating
+        existing = user_store.user_addresses(user_id)
+        if len(existing) >= 10:
+            return jsonify({"error": "Address limit reached (max 10). Delete an address first."}), 403
         user_store.claim_address(address, user_id)
 
     # Create the inbox file so SMTP will accept mail
@@ -164,13 +190,13 @@ def get_random_address():
 
 
 # Get an email domain
-@bp.route('/get_domain')
+@bp.route('/domains')
 def get_domain():
     return jsonify({"domains": config.settings.domain_list}), 200
 
 
 # This route returns the contents of an inbox
-@bp.route('/get_inbox')
+@bp.route('/inbox')
 def get_inbox():
     """Return the inbox for a given address.
 
@@ -213,10 +239,12 @@ def get_inbox():
 # --- API key management ---
 
 @bp.route('/api_key', methods=['GET'])
-@require_api_key
 def get_api_keys():
     """Return the user's active API keys (prefixes only)."""
-    keys = user_store.get_user_keys(g.user_id)
+    user_id = _resolve_user()
+    if user_id is None:
+        return jsonify({"error": "Unauthorized"}), 401
+    keys = user_store.get_user_keys(user_id)
     return jsonify({"keys": keys}), 200
 
 
@@ -228,6 +256,10 @@ def create_api_key():
     If the user already has an active key, it is revoked first (regenerate).
     Each user is limited to 1 active key.
     """
+    # Rate limit
+    if not _mutation_limiter.allow(request.remote_addr):
+        return jsonify({"error": "Too many requests. Try again later."}), 429
+
     user_id = _resolve_user()
     if user_id is None:
         return jsonify({"error": "You must be logged in to create an API key. Please register or log in."}), 401
@@ -245,10 +277,12 @@ def create_api_key():
 
 
 @bp.route('/api_key/<int:key_id>', methods=['DELETE'])
-@require_api_key
 def revoke_api_key(key_id):
     """Revoke one of the user's API keys."""
-    if user_store.revoke_api_key(key_id, g.user_id):
+    user_id = _resolve_user()
+    if user_id is None:
+        return jsonify({"error": "Unauthorized"}), 401
+    if user_store.revoke_api_key(key_id, user_id):
         return jsonify({"message": "Key revoked"}), 200
     return jsonify({"error": "Key not found"}), 404
 
@@ -256,17 +290,25 @@ def revoke_api_key(key_id):
 # --- Address management ---
 
 @bp.route('/addresses', methods=['GET'])
-@require_api_key
 def list_addresses():
     """Return all addresses claimed by the authenticated user."""
-    addresses = user_store.user_addresses(g.user_id)
+    user_id = _resolve_user()
+    if user_id is None:
+        return jsonify({"error": "Unauthorized"}), 401
+    addresses = user_store.user_addresses(user_id)
     return jsonify({"addresses": addresses}), 200
 
 
 @bp.route('/addresses', methods=['POST'])
-@require_api_key
 def claim_address():
     """Claim a specific address for the authenticated user."""
+    # Rate limit
+    if not _mutation_limiter.allow(request.remote_addr):
+        return jsonify({"error": "Too many requests. Try again later."}), 429
+
+    user_id = _resolve_user()
+    if user_id is None:
+        return jsonify({"error": "Unauthorized"}), 401
     data = request.get_json(silent=True) or {}
     address = (data.get("address") or "").strip().lower()
     if not address or "@" not in address:
@@ -277,24 +319,33 @@ def claim_address():
     if domain_part not in config.settings.domain_list:
         return jsonify({"error": f"Domain '{domain_part}' is not accepted"}), 400
 
-    if user_store.claim_address(address, g.user_id):
-        inbox_handler.create_inbox(address)
-        return jsonify({"message": "Address claimed"}), 201
-    return jsonify({"error": "Address already claimed"}), 409
+    try:
+        if user_store.claim_address(address, user_id):
+            inbox_handler.create_inbox(address)
+            return jsonify({"message": "Address claimed"}), 201
+        return jsonify({"error": "Address already claimed"}), 409
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 403
 
 
 @bp.route('/addresses/<path:address>', methods=['DELETE'])
-@require_api_key
 def delete_address(address):
     """Release an address claim."""
+    user_id = _resolve_user()
+    if user_id is None:
+        return jsonify({"error": "Unauthorized"}), 401
     address = address.lower()
-    if user_store.delete_address(address, g.user_id):
+    if user_store.delete_address(address, user_id):
+        # Clean up the inbox file
+        inbox_path = inbox_handler._inbox_path(address)
+        if os.path.isfile(inbox_path):
+            os.remove(inbox_path)
         return jsonify({"message": "Address released"}), 200
     return jsonify({"error": "Address not found or not yours"}), 404
 
 
 # This route sends an email
-@bp.route('/send_email', methods=['POST'])
+@bp.route('/send', methods=['POST'])
 def send_email_route():
     if not config.settings.ENABLE_SENDING:
         return jsonify({"error": "Sending is disabled"}), 403
@@ -322,6 +373,16 @@ def send_email_route():
     from_domain = from_address.split("@")[1] if "@" in from_address else ""
     if from_domain not in config.settings.domain_list:
          return jsonify({"error": f"You can only send from addresses on these domains: {', '.join(config.settings.domain_list)}"}), 403
+
+    # Validate To domain — must also be on an accepted domain (prevent open relay)
+    to_domain = to_address.split("@")[1] if "@" in to_address else ""
+    if to_domain not in config.settings.domain_list:
+        return jsonify({"error": f"You can only send to addresses on these domains: {', '.join(config.settings.domain_list)}"}), 403
+
+    # Enforce From address ownership for logged-in users
+    owner = user_store.address_owner(from_address)
+    if owner is not None and owner != user_id:
+        return jsonify({"error": "You can only send from addresses you own"}), 403
 
     success, message = sender.send_email(from_address, to_address, subject, body)
 

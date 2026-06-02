@@ -23,13 +23,14 @@ def _get_db() -> sqlite3.Connection:
 
 
 def init_db():
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist, migrate if they do."""
     conn = _get_db()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             email           TEXT NOT NULL UNIQUE,
             password_hash   TEXT NOT NULL DEFAULT '',
+            flags           TEXT NOT NULL DEFAULT '',
             created_at      TEXT NOT NULL DEFAULT (datetime('now')),
             label           TEXT NOT NULL DEFAULT ''
         );
@@ -39,6 +40,7 @@ def init_db():
             user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             key_hash    TEXT NOT NULL UNIQUE,
             key_prefix  TEXT NOT NULL,
+            raw_key     TEXT NOT NULL DEFAULT '',
             created_at  TEXT NOT NULL DEFAULT (datetime('now')),
             revoked     INTEGER NOT NULL DEFAULT 0
         );
@@ -56,6 +58,33 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_addresses_address ON addresses(address);
         CREATE INDEX IF NOT EXISTS idx_addresses_user_id ON addresses(user_id);
     """)
+
+    # Migration: add missing columns for databases created before the schema update
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+    if "email" not in existing_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
+        # Assign placeholder emails to existing rows that have empty email
+        rows = conn.execute("SELECT id FROM users WHERE email = ''").fetchall()
+        for row in rows:
+            placeholder = f"user_{row['id']}@migrated.local"
+            conn.execute("UPDATE users SET email = ? WHERE id = ?", (placeholder, row['id']))
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+        logger.info("Migrated users table: added email column")
+    if "password_hash" not in existing_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''")
+        logger.info("Migrated users table: added password_hash column")
+
+    # Migration: add flags column
+    if "flags" not in existing_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN flags TEXT NOT NULL DEFAULT ''")
+        logger.info("Migrated users table: added flags column")
+
+    # Migration: add raw_key column to api_keys
+    api_cols = {row[1] for row in conn.execute("PRAGMA table_info(api_keys)").fetchall()}
+    if "raw_key" not in api_cols:
+        conn.execute("ALTER TABLE api_keys ADD COLUMN raw_key TEXT NOT NULL DEFAULT ''")
+        logger.info("Migrated api_keys table: added raw_key column")
+
     conn.commit()
     conn.close()
     logger.info("Database initialised")
@@ -119,7 +148,7 @@ def get_user_by_id(user_id: int) -> dict | None:
     """Return user info dict or None."""
     conn = _get_db()
     row = conn.execute(
-        "SELECT id, email, created_at, label FROM users WHERE id = ?",
+        "SELECT id, email, flags, created_at, label FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
     conn.close()
@@ -160,8 +189,8 @@ def generate_api_key(user_id: int) -> str:
     prefix = raw[:10]
     key_hash = _hash_key(raw)
     conn.execute(
-        "INSERT INTO api_keys (user_id, key_hash, key_prefix) VALUES (?, ?, ?)",
-        (user_id, key_hash, prefix),
+        "INSERT INTO api_keys (user_id, key_hash, key_prefix, raw_key) VALUES (?, ?, ?, ?)",
+        (user_id, key_hash, prefix, raw),
     )
     conn.commit()
     conn.close()
@@ -182,10 +211,10 @@ def lookup_user_by_key(raw_key: str) -> int | None:
 
 
 def get_user_keys(user_id: int) -> list[dict]:
-    """Return active API keys for a user (prefixes only, never full keys)."""
+    """Return active API keys for a user (includes raw_key for display)."""
     conn = _get_db()
     rows = conn.execute(
-        "SELECT id, key_prefix, created_at FROM api_keys WHERE user_id = ? AND revoked = 0 ORDER BY created_at DESC",
+        "SELECT id, key_prefix, raw_key, created_at FROM api_keys WHERE user_id = ? AND revoked = 0 ORDER BY created_at DESC",
         (user_id,),
     ).fetchall()
     conn.close()
@@ -205,9 +234,21 @@ def revoke_api_key(key_id: int, user_id: int) -> bool:
 
 
 def claim_address(address: str, user_id: int) -> bool:
-    """Claim an address for a user. Returns True if claimed, False if taken."""
+    """Claim an address for a user. Returns True if claimed, False if taken.
+
+    Enforces a maximum of 10 addresses per user.
+    """
     conn = _get_db()
     try:
+        # Check address limit
+        count = conn.execute(
+            "SELECT COUNT(*) FROM addresses WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()[0]
+        if count >= 10:
+            conn.close()
+            raise ValueError("Address limit reached (max 10 addresses per user)")
+
         conn.execute(
             "INSERT INTO addresses (user_id, address) VALUES (?, ?)",
             (user_id, address),
@@ -240,6 +281,34 @@ def user_addresses(user_id: int) -> list[str]:
     ).fetchall()
     conn.close()
     return [r["address"] for r in rows]
+
+
+def user_has_flag(user_id: int, flag: str) -> bool:
+    """Check if a user has a specific flag set.
+
+    Flags are stored as a comma-separated list in the `flags` column.
+    """
+    user = get_user_by_id(user_id)
+    if user is None:
+        return False
+    user_flags = [f.strip() for f in user.get("flags", "").split(",") if f.strip()]
+    return flag in user_flags
+
+
+def set_user_flag(user_id: int, flag: str) -> None:
+    """Add a flag to a user (idempotent)."""
+    conn = _get_db()
+    user = get_user_by_id(user_id)
+    if user is None:
+        conn.close()
+        return
+    current_flags = [f.strip() for f in user.get("flags", "").split(",") if f.strip()]
+    if flag not in current_flags:
+        current_flags.append(flag)
+        new_flags = ",".join(current_flags)
+        conn.execute("UPDATE users SET flags = ? WHERE id = ?", (new_flags, user_id))
+        conn.commit()
+    conn.close()
 
 
 def delete_address(address: str, user_id: int) -> bool:

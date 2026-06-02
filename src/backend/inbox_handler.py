@@ -100,7 +100,31 @@ def create_inbox(recipient: str):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
             json.dump([], f)
-        logger.info(f"Created inbox for {recipient}")
+
+
+def delete_email(recipient: str, email_id: str) -> bool:
+    """Delete a single email from an inbox by its ID.
+
+    Returns True if the email was found and deleted, False otherwise.
+    """
+    path = _inbox_path(recipient)
+    if not os.path.isfile(path):
+        return False
+
+    try:
+        with open(path, "r") as f:
+            emails = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+
+    before = len(emails)
+    emails = [e for e in emails if e.get("id") != email_id]
+    if len(emails) == before:
+        return False
+
+    with open(path, "w") as f:
+        json.dump(emails, f, indent=4)
+    return True
 
 
 def recv_email(email_json: dict):

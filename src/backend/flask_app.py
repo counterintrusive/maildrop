@@ -2,6 +2,7 @@ import logging
 import os
 from flask import Flask
 from .routes import pages, api, auth
+from . import user_store
 import config
 
 logger = logging.getLogger("maildrop")
@@ -27,6 +28,10 @@ app.config["SESSION_PERMANENT"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = 86400 * 30  # 30 days
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# Initialize the database on first run (only if the file doesn't exist)
+if not os.path.isfile(user_store.DB_PATH):
+    user_store.init_db()
 
 app.register_blueprint(pages.bp) # load the blueprint for the all of the main web page routes
 app.register_blueprint(api.bp) # load the blueprint for the all of the api routes

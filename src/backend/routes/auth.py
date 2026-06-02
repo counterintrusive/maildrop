@@ -38,7 +38,7 @@ def log_after_request(response):
 
 # --- Page routes ---
 
-@bp.route('/login')
+@bp.route('/login', methods=['GET'])
 def login_page():
     """Render the login page."""
     if session.get("user_id"):
@@ -46,7 +46,7 @@ def login_page():
     return render_template('login.html')
 
 
-@bp.route('/register')
+@bp.route('/register', methods=['GET'])
 def register_page():
     """Render the registration page."""
     if session.get("user_id"):
@@ -58,8 +58,6 @@ def register_page():
 def logout():
     """Log out and redirect to the main page."""
     session.clear()
-    # Create a new session to prevent session fixation
-    session.cycle_key() if hasattr(session, 'cycle_key') else None
     return redirect(url_for("pages.index"))
 
 
@@ -166,7 +164,10 @@ def api_me():
 
     keys = user_store.get_user_keys(user_id)
     return jsonify({
+        "authenticated": True,
         "user": user,
         "has_api_key": len(keys) > 0,
+        "api_key": keys[0]["raw_key"] if keys else None,
         "keys": keys,
+        "flags": [f.strip() for f in user.get("flags", "").split(",") if f.strip()],
     }), 200

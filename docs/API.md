@@ -5,7 +5,7 @@ These are all of the routes in the Maildrop+ API.
 ### Get Inbox
 Gets the current inbox of an email address
 ```http
-GET /get_inbox?address=you@yourdomain.com
+GET /inbox?address=you@yourdomain.com
 ```
 **Parameters**
 | Parameter | Description               |
@@ -30,7 +30,7 @@ GET /get_inbox?address=you@yourdomain.com
 ### Get Random Address
 Generates a random email address using the current domain  
 ```http
-GET /get_random_address
+GET /address
 ```
 **Response**
 ```json
@@ -42,7 +42,7 @@ GET /get_random_address
 ### Get Domain
 Gets the current domain
 ```http
-GET /get_domain
+GET /domains
 ```
 **Response**
 ```json

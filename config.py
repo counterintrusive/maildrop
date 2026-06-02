@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     SMTP_TLS_KEY: str = ""
 
     # --- CSRF protection (H3) ---
-    # Comma-separated list of allowed Origin values for POST /send_email.
+    # Comma-separated list of allowed Origin values for POST /send.
     # Leave empty to allow all (backward compatible).
     ALLOWED_ORIGINS: str = ""
 

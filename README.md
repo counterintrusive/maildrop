@@ -5,7 +5,14 @@
 
 *A self-hostable disposable email inbox with SMTP server, user accounts, and API key authentication — forked and enhanced for AI LLM agent access*
 
-![App Screenshot](pictures/app.png)
+![Inbox View](pictures/app.png)
+*Main inbox view — generate random addresses, copy to clipboard, and read incoming emails.*
+
+![Login](pictures/login.png)
+*Login page — registered users can sign in to manage their API keys.*
+
+![Register](pictures/register.png)
+*Registration page — create an account and receive an API key automatically.*
 
 ## Table of Contents
 - [About The Project](#about-the-project)
@@ -57,6 +64,8 @@ It is designed for:
 - [x] **API key authentication** — each user gets one API key for programmatic access
 - [x] **Guest mode** — use the web panel without an account
 - [x] **Address ownership** — addresses are claimed on generation and tied to your account
+- [x] **Address limit** — max 10 addresses per user
+- [x] **User flags** — per-user feature flags (e.g. `custom_email` for manual address entry)
 - [x] Per-inbox storage with oldest-first eviction
 - [x] Per-IP rate limiting (SMTP + HTTP auth endpoints)
 - [x] Anti-detection SMTP features (generic banner, random delays, unknown-recipient rejection)
@@ -171,7 +180,7 @@ Create a `.env` file (copy `.env.example` for a template).
 | `DROP_PRIV_USER`        | _(empty)_          | User to drop privileges to after binding SMTP port.        |
 | `SMTP_TLS_CERT`         | _(empty)_          | Path to TLS certificate file for SMTP STARTTLS.            |
 | `SMTP_TLS_KEY`          | _(empty)_          | Path to TLS private key file for SMTP STARTTLS.            |
-| `ALLOWED_ORIGINS`       | _(empty)_          | Comma-separated origins allowed for `POST /send_email`.    |
+| `ALLOWED_ORIGINS`       | _(empty)_          | Comma-separated origins allowed for `POST /send`.    |
 | `FLASK_SECRET_KEY`      | _(empty)_          | Secret key for Flask session signing (auto-generated if empty). |
 | `RELAY_HOST`            | _(empty)_          | SMTP relay host for sending emails.                        |
 | `RELAY_PORT`            | `2525`             | SMTP relay port.                                           |
@@ -184,7 +193,7 @@ Maildrop+ supports user accounts with session-based authentication and per-user 
 
 ### Guest mode
 
-The web panel works without an account — you can generate random addresses and read inboxes as a guest. Guest-generated addresses are not tied to any user and are accessible to anyone who knows the address.
+The web panel works without an account — you can generate random addresses and read inboxes as a guest. Guest-generated addresses are not tied to any user and are accessible to anyone who knows the address. Guests cannot send emails or create API keys.
 
 ### Registration & login
 
@@ -192,11 +201,11 @@ The web panel works without an account — you can generate random addresses and
 - **`/auth/login`** — Log in to an existing account.
 - **`/auth/logout`** — End your session.
 
-Once logged in, addresses you generate are **claimed** to your account. Only you can read their inboxes (unless the address matches a protected-address pattern and the global password is provided).
+Once logged in, addresses you generate are **claimed** to your account (max 10 per user). Only you can read their inboxes (unless the address matches a protected-address pattern and the global password is provided).
 
 ### API key management
 
-Each user is limited to **one active API key**. Keys are shown once on registration and can be regenerated from the settings modal (gear icon in the web panel header).
+Each user is limited to **one active API key**. Keys are stored in the database and returned by `/auth/me`, so they persist across browsers and sessions.
 
 - **`POST /auth/generate`** — Revoke the current key and generate a new one (requires session).
 - **`Authorization: Bearer <key>`** — Use this header for programmatic API access.
@@ -222,7 +231,11 @@ Each recipient's emails are stored in a separate file under `INBOX_DIR` (default
 
 ### Address ownership
 
-When a logged-in user generates a random address, it is claimed to their account. Attempting to read another user's address returns `403 Forbidden`. Guest-generated addresses are unclaimed and publicly accessible.
+When a logged-in user generates a random address, it is claimed to their account (max 10 per user). Attempting to read another user's address returns `403 Forbidden`. Guest-generated addresses are unclaimed and publicly accessible.
+
+### User flags
+
+Users can be assigned feature flags stored as a comma-separated list in the `flags` column. The `custom_email` flag enables manual address entry in the "Use Custom" modal — users with this flag can type any address on an accepted domain, while users without it can only select from their owned addresses.
 
 ### Privilege separation
 
@@ -234,7 +247,7 @@ Set `SMTP_TLS_CERT` and `SMTP_TLS_KEY` to enable STARTTLS on the SMTP server. Wh
 
 ### CSRF / Origin validation
 
-When `ALLOWED_ORIGINS` is set (comma-separated), `POST /send_email` requests are validated against the `Origin` header (with `Referer` fallback). Requests from unlisted origins receive a `403 Forbidden` response.
+When `ALLOWED_ORIGINS` is set (comma-separated), `POST /send` requests are validated against the `Origin` header (with `Referer` fallback). Requests from unlisted origins receive a `403 Forbidden` response.
 
 ### Security headers
 
@@ -261,7 +274,7 @@ Maildrop+ also supports sending mail as an optional feature. Visit the [Sending 
 
 ## API Reference
 
-Visit the [API Reference](docs/API.md) for instructions on interacting with Maildrop+ via the simple JSON API. The API returns the full list of configured domains via `GET /get_domain` and generates random addresses across all domains.
+Visit the [API Reference](docs/API.md) for instructions on interacting with Maildrop+ via the simple JSON API. The API returns the full list of configured domains via `GET /domains`, lists your claimed addresses via `GET /addresses`, and generates random addresses across all domains.
 
 You can also browse the interactive [API Docs](/api-docs) page on your running instance.
 
