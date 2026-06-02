@@ -165,6 +165,13 @@ body {
     transform: translateY(-2px);
 }
 
+/* copied state for copy button */
+.btn-secondary.copied {
+    background-color: #2a7a3e;
+    color: #fff;
+    transition: background-color 0.15s ease;
+}
+
 /* inbox display box */
 .inbox-section {
     background-color: var(--surface-color);

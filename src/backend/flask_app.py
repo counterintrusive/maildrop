@@ -1,13 +1,51 @@
 import logging
+import os
 from flask import Flask
 from .routes import pages, api
+import config
 
 logger = logging.getLogger("maildrop")
 
-app = Flask(__name__, template_folder='../frontend/templates', static_folder='../frontend/static')
+# Resolve template/static paths relative to this file's location
+_basedir = os.path.abspath(os.path.dirname(__file__))
+
+app = Flask(__name__,
+            template_folder=os.path.join(_basedir, '..', 'frontend', 'templates'),
+            static_folder=os.path.join(_basedir, '..', 'frontend', 'static'))
+
+# Set a secret key for session signing (L3)
+if config.settings.FLASK_SECRET_KEY:
+    app.secret_key = config.settings.FLASK_SECRET_KEY
+else:
+    # Fallback: generate a random key each startup (invalidates sessions on restart)
+    import secrets
+    app.secret_key = secrets.token_hex(32)
+    logger.warning("FLASK_SECRET_KEY not set — using ephemeral key (sessions invalidated on restart)")
 
 app.register_blueprint(pages.bp) # load the blueprint for the all of the main web page routes
 app.register_blueprint(api.bp) # load the blueprint for the all of the api routes
+
+
+# Security headers (L2)
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Strict CSP — only same-origin resources
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'"
+    )
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 
 # disable flask's logging
 logging.getLogger("werkzeug").setLevel(logging.ERROR)

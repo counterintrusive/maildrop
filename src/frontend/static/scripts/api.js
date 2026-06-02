@@ -22,8 +22,8 @@ async function getRandomAddress() {
     return await response.json();
 }
 
-// get a domain from the server
-async function getDomain() {
+// get the accepted domains from the server
+async function getDomains() {
     const response = await fetch('/get_domain');
     
     return await response.json();

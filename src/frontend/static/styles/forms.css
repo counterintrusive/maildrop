@@ -77,3 +77,15 @@
     gap: 1rem;
     margin-top: 1.5rem;
 }
+
+/* inline error message in modal */
+.modal-error {
+    color: #e74c3c;
+    font-size: 0.85rem;
+    margin-top: 1rem;
+    padding: 0.5rem;
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: var(--content-radius);
+    white-space: pre-wrap;
+}

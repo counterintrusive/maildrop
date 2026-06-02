@@ -8,10 +8,11 @@ if __name__ == "__main__":
     setup_logging(level=logging.INFO)
     logger = logging.getLogger("maildrop")
 
-    # Check if the script is run as root
+    # Warn if not root — SMTP on port 25 requires root to bind.
+    # The SMTP server will drop privileges after binding (H4).
     if os.geteuid() != 0:
-        logger.critical("Maildrop must be ran as root.")
-        sys.exit(1)
+        logger.warning("Not running as root. SMTP on port 25 will fail unless "
+                       "you use authbind / a privileged port redirect.")
 
     # import backend after logging is set up to report errors
     import config

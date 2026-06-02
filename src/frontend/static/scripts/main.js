@@ -28,7 +28,17 @@ document.addEventListener("DOMContentLoaded", () => {
     function copyToClipboard() {
         emailInput.select();
         document.execCommand('copy');
-        alert('Copied!');
+
+        // Show copied state on the button
+        const originalText = copyBtn.querySelector('.button-text').textContent;
+        copyBtn.querySelector('.button-text').textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+
+        // Reset after 2 seconds
+        setTimeout(() => {
+            copyBtn.querySelector('.button-text').textContent = originalText;
+            copyBtn.classList.remove('copied');
+        }, 2000);
     }
 
     // generate random email and assign it as the current email
@@ -137,7 +147,31 @@ document.addEventListener("DOMContentLoaded", () => {
                     emailItem.classList.toggle('open');
                     const iframe = emailItem.querySelector('.email-body-iframe');
                     if (emailItem.classList.contains('open')) {
-                        iframe.srcdoc = email.Body;
+                        // Wrap body in a styled document so text is readable
+                        // on the dark background
+                        iframe.srcdoc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    body {
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+        font-family: 'Roboto Mono', monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        padding: 1rem;
+        margin: 0;
+    }
+    a { color: #9b6fc0; }
+    img { max-width: 100%; height: auto; }
+    pre, code { background-color: #2a2a2a; padding: 0.2em 0.4em; border-radius: 3px; }
+    pre { padding: 1rem; overflow-x: auto; }
+    blockquote { border-left: 3px solid #9b6fc0; margin: 0; padding-left: 1rem; color: #aaa; }
+</style>
+</head>
+<body>${email.Body}</body>
+</html>`;
                     }
                 });
             });
@@ -146,20 +180,48 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // use a custom email address
+    // use a custom email address — must be on an accepted domain
     async function handleCustomEmail() {
-        var customEmail = prompt("Enter your custom email address:");
-        if (customEmail) {
-            if (!customEmail.includes("@")) {
-                domain = await getDomain();
-                customEmail = customEmail + "@" + domain.domain;
-            }
-            updateEmail(customEmail);
-        }
+        // Fetch accepted domains from the server
+        const domainData = await getDomains();
+        const acceptedDomains = domainData.domains || [];
+
+        showModalForm(
+            "Use Custom Email",
+            [
+                {
+                    name: "email",
+                    label: `Email address (accepted domains: ${acceptedDomains.join(", ")})`,
+                    type: "email",
+                    placeholder: `user@${acceptedDomains[0] || "example.com"}`,
+                    required: true
+                }
+            ],
+            async (data) => {
+                let customEmail = data.email.trim();
+                if (!customEmail) return;
+
+                if (!customEmail.includes("@")) {
+                    customEmail = customEmail + "@" + acceptedDomains[0];
+                    updateEmail(customEmail);
+                    return;
+                }
+
+                const domainPart = customEmail.split("@")[1].toLowerCase();
+                if (!acceptedDomains.some(d => d.toLowerCase() === domainPart)) {
+                    throw new Error(
+                        `"${domainPart}" is not an accepted domain.\nAccepted domains: ${acceptedDomains.join(", ")}`
+                    );
+                }
+
+                updateEmail(customEmail);
+            },
+            "Use"
+        );
     }
 
     // shows a form to the user
-    function showModalForm(title, fields, onSubmit) {
+    function showModalForm(title, fields, onSubmit, submitLabel = "Send") {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
 
@@ -182,7 +244,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary cancel-btn">Cancel</button>
                     <button type="submit" class="btn btn-primary">
-                        Send
+                        ${submitLabel}
                     </button>
                 </div>
             </form>
@@ -199,7 +261,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const submitBtn = overlay.querySelector('button[type="submit"]');
             const originalText = submitBtn.innerHTML;
             submitBtn.disabled = true;
-            submitBtn.innerHTML = "Sending..";
+            submitBtn.innerHTML = `${submitLabel}..`;
 
             const formData = new FormData(event.target);
             const data = Object.fromEntries(formData.entries());
@@ -208,7 +270,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 await onSubmit(data);
                 close();
             } catch (error) {
-                alert("Error: " + error.message);
+                // Show error inline in the modal instead of alert
+                const existingError = overlay.querySelector('.modal-error');
+                if (existingError) existingError.remove();
+
+                const errorEl = document.createElement('p');
+                errorEl.className = 'modal-error';
+                errorEl.textContent = error.message;
+                overlay.querySelector('.modal-actions').before(errorEl);
+
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
             }
@@ -253,7 +323,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (result.error) {
                     throw new Error(result.error);
                 }
-                alert("Email sent successfully!");
+                // Show success state on the send button briefly
+                const sendBtn = document.getElementById('send-btn');
+                const originalText = sendBtn.querySelector('.button-text').textContent;
+                sendBtn.querySelector('.button-text').textContent = 'Sent!';
+                sendBtn.classList.add('copied');
+                setTimeout(() => {
+                    sendBtn.querySelector('.button-text').textContent = originalText;
+                    sendBtn.classList.remove('copied');
+                }, 2000);
             }
         );
     }

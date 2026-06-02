@@ -2,6 +2,7 @@ import time
 from datetime import datetime
 from email.parser import BytesParser
 from email.message import Message
+import config
 
 # Converts a Unix timestamp to a formatted string like this: Jan 01 at 00:00:00
 def format_time(timestamp: float) -> str:
@@ -18,6 +19,10 @@ def extract_email_address(field: str) -> str:
 
 # Parses raw email bytes into a JSON dictionary for easy processing
 def email_bytes_to_json(data: bytes) -> dict:
+    # Double-check size (the SMTP layer also enforces this, but defence in depth)
+    if len(data) > config.settings.MAX_EMAIL_SIZE:
+        raise ValueError(f"Email size {len(data)} exceeds limit {config.settings.MAX_EMAIL_SIZE}")
+
     msg = BytesParser().parsebytes(data)
     
     to_field = extract_email_address(msg.get("To", "")).lower()
@@ -39,7 +44,15 @@ def email_bytes_to_json(data: bytes) -> dict:
     for part in msg.walk():
         content_type = part.get_content_type()
         if content_type == "text/plain" or content_type == "text/html":
-            email_dict["Body"] = part.get_payload(decode=True).decode(part.get_content_charset() or "utf-8")
+            payload = part.get_payload(decode=True)
+            if payload is None:
+                continue
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                email_dict["Body"] = payload.decode(charset)
+            except (LookupError, UnicodeDecodeError):
+                # Fallback for unknown or broken charsets
+                email_dict["Body"] = payload.decode("utf-8", errors="replace")
             if content_type == "text/plain":
                 email_dict["ContentType"] = "Text"
             if content_type == "text/html":
