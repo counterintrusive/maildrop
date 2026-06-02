@@ -309,6 +309,11 @@ def claim_address():
     user_id = _resolve_user()
     if user_id is None:
         return jsonify({"error": "Unauthorized"}), 401
+
+    # Only users with the custom_email flag can claim specific addresses
+    if not user_store.user_has_flag(user_id, "custom_email"):
+        return jsonify({"error": "Custom address claiming is not enabled for your account"}), 403
+
     data = request.get_json(silent=True) or {}
     address = (data.get("address") or "").strip().lower()
     if not address or "@" not in address:

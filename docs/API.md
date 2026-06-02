@@ -229,7 +229,7 @@ Authorization: Bearer <key>
 }
 ```
 
-Claims a specific address for the authenticated user. Max 10 addresses per user.
+Claims a specific address for the authenticated user. Requires the `custom_email` flag on the user account. Max 10 addresses per user.
 
 **Response** `201`
 ```json
