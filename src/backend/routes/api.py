@@ -276,17 +276,6 @@ def create_api_key():
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route('/api_key/<int:key_id>', methods=['DELETE'])
-def revoke_api_key(key_id):
-    """Revoke one of the user's API keys."""
-    user_id = _resolve_user()
-    if user_id is None:
-        return jsonify({"error": "Unauthorized"}), 401
-    if user_store.revoke_api_key(key_id, user_id):
-        return jsonify({"message": "Key revoked"}), 200
-    return jsonify({"error": "Key not found"}), 404
-
-
 # --- Address management ---
 
 @bp.route('/addresses', methods=['GET'])
