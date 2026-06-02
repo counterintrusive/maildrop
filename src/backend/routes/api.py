@@ -3,6 +3,7 @@ from .. import inbox_handler
 from .. import sender
 import config
 import re
+import os
 import secrets
 import string
 import logging
@@ -47,45 +48,21 @@ def _origin_allowed() -> bool:
     return False
 
 
-# Word lists for generating human-readable local parts
+# Word lists for generating human-readable local parts.
+# Loaded from data/ files so users can customise them without editing code.
 # Multiple patterns avoid fingerprinting from repeated identical formats.
-FIRST_NAMES = [
-    "alex", "andy", "ben", "cara", "chris", "dan", "dave", "emma",
-    "eric", "grace", "jade", "james", "jane", "jess", "jill", "john",
-    "julia", "kate", "kurt", "lara", "luke", "maria", "mark", "matt",
-    "maya", "megan", "mia", "mike", "nate", "nina", "noah", "nora",
-    "owen", "paige", "paul", "quinn", "ray", "rose", "ruth", "ryan",
-    "sam", "sara", "seth", "sophie", "tess", "tom", "troy", "vera",
-    "vince", "wade", "will", "zara", "zoe", "adam", "amy", "anna",
-    "beau", "beth", "brad", "chloe", "cole", "dana", "drew", "ella",
-]
+def _load_wordlist(filename: str) -> list[str]:
+    path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'data', filename)
+    try:
+        with open(path) as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        logger.warning(f"Wordlist not found: {path}")
+        return []
 
-LAST_NAMES = [
-    "adams", "allen", "baker", "bell", "brown", "carter", "clark",
-    "cole", "cook", "cooper", "cox", "davis", "diaz", "evans", "fisher",
-    "foster", "garcia", "gray", "green", "hall", "harris", "hill",
-    "howard", "hughes", "james", "jenkins", "jones", "kelly", "king",
-    "lee", "lewis", "long", "lopez", "martin", "miller", "moore",
-    "morgan", "murphy", "nelson", "parker", "perez", "phillips", "price",
-    "reed", "rivera", "roberts", "ross", "russell", "sanchez", "scott",
-    "smith", "stewart", "taylor", "thomas", "turner", "walker", "ward",
-    "watson", "white", "williams", "wilson", "wood", "wright", "young",
-]
-
-NOUNS = [
-    "tiger", "eagle", "panda", "robin", "otter", "crane", "fox", "hawk",
-    "wolf", "bear", "deer", "dove", "duck", "frog", "hare", "hawk",
-    "heron", "koala", "lark", "lion", "lynx", "mole", "moose", "newt",
-    "owl", "puma", "raven", "seal", "shrew", "skunk", "snail",
-    "swan", "toad", "whale", "wren", "elm", "fir", "oak", "pine",
-    "rose", "lily", "iris", "fern", "moss", "reed", "vine", "willow",
-    "ash", "beech", "birch", "cedar", "cherry", "cypress", "hazel",
-    "hemlock", "holly", "ivy", "juniper", "laurel", "maple", "myrtle",
-    "olive", "pear", "plum", "poplar", "spruce", "yew", "cove", "dale",
-    "dell", "edge", "ford", "gate", "glen", "hill", "knoll", "meadow",
-    "moor", "peak", "ridge", "vale", "wood", "brook", "creek", "lake",
-    "pond", "pool", "river", "stream", "bay", "reef", "shore", "wave",
-]
+FIRST_NAMES = _load_wordlist('first_names.txt')
+LAST_NAMES = _load_wordlist('last_names.txt')
+NOUNS = _load_wordlist('nouns.txt')
 
 
 def _generate_local_part() -> str:
@@ -93,15 +70,16 @@ def _generate_local_part() -> str:
 
     Avoids high-entropy random strings that security systems flag.
     """
-    num = secrets.randbelow(900) + 100  # 3-digit number
-    small_num = secrets.randbelow(90) + 10  # 2-digit number
+    num3 = secrets.randbelow(900) + 100    # 3-digit number (100-999)
+    num4 = secrets.randbelow(9000) + 1000  # 4-digit number (1000-9999)
+    small_num = secrets.randbelow(90) + 10  # 2-digit number (10-99)
     pattern = secrets.choice([
         # first.last.number — e.g. james.smith.847
-        lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(LAST_NAMES)}.{num}",
+        lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(LAST_NAMES)}.{num3}",
         # first_last_number — e.g. emma_brown_847
-        lambda: f"{secrets.choice(FIRST_NAMES)}_{secrets.choice(LAST_NAMES)}_{num}",
+        lambda: f"{secrets.choice(FIRST_NAMES)}_{secrets.choice(LAST_NAMES)}_{num3}",
         # first-last-number — e.g. luke-hill-312
-        lambda: f"{secrets.choice(FIRST_NAMES)}-{secrets.choice(LAST_NAMES)}-{num}",
+        lambda: f"{secrets.choice(FIRST_NAMES)}-{secrets.choice(LAST_NAMES)}-{num3}",
         # first.last — e.g. alex.miller
         lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(LAST_NAMES)}",
         # first_last — e.g. sam_smith
@@ -109,15 +87,29 @@ def _generate_local_part() -> str:
         # first-last — e.g. mia-jones
         lambda: f"{secrets.choice(FIRST_NAMES)}-{secrets.choice(LAST_NAMES)}",
         # firstNUMBER — e.g. alex847
-        lambda: f"{secrets.choice(FIRST_NAMES)}{num}",
+        lambda: f"{secrets.choice(FIRST_NAMES)}{num3}",
         # first.noun — e.g. sam.fox
         lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(NOUNS)}",
         # first_noun — e.g. kate_tiger
         lambda: f"{secrets.choice(FIRST_NAMES)}_{secrets.choice(NOUNS)}",
         # nounNUMBER — e.g. tiger312
-        lambda: f"{secrets.choice(NOUNS)}{num}",
+        lambda: f"{secrets.choice(NOUNS)}{num3}",
         # first.smallnum — e.g. kate.42
         lambda: f"{secrets.choice(FIRST_NAMES)}.{small_num}",
+        # first.last.4digit — e.g. james.smith.3847
+        lambda: f"{secrets.choice(FIRST_NAMES)}.{secrets.choice(LAST_NAMES)}.{num4}",
+        # first_4digit — e.g. emma_3847
+        lambda: f"{secrets.choice(FIRST_NAMES)}_{num4}",
+        # last-4digit — e.g. smith-3847
+        lambda: f"{secrets.choice(LAST_NAMES)}-{num4}",
+        # initial.lastname — e.g. j.smith
+        lambda: f"{secrets.choice(FIRST_NAMES)[0]}.{secrets.choice(LAST_NAMES)}",
+        # initial_lastname — e.g. j_smith
+        lambda: f"{secrets.choice(FIRST_NAMES)[0]}_{secrets.choice(LAST_NAMES)}",
+        # initial.noun — e.g. k.tiger
+        lambda: f"{secrets.choice(FIRST_NAMES)[0]}.{secrets.choice(NOUNS)}",
+        # initial_noun — e.g. k_tiger
+        lambda: f"{secrets.choice(FIRST_NAMES)[0]}_{secrets.choice(NOUNS)}",
     ])
     return pattern()
 
